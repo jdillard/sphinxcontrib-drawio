@@ -282,7 +282,7 @@ class DrawIOConverter(ImageConverter):
                 for line in errors:
                     match = re.search(r'{}'.format(warning), line)
                     if match:
-                        print('SUPRESSED WARNING: [{0}] {1}'.format(warning, line))
+                        print('SUPPRESSED WARNING: [{0}] {1}'.format(warning, line))
                     else:
                         failed = True
             if failed:
