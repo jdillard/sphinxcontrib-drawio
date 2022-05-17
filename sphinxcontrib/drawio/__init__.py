@@ -280,7 +280,7 @@ class DrawIOConverter(ImageConverter):
             errors = exc.stderr.decode('utf8').split('\n')
             for warning in supress_stderr_warnings:
                 for line in errors:
-                    match = re.search(re.escape(warning), line)
+                    match = re.search(r'{}'.format(warning), line)
                     if match:
                         print('SUPRESSED WARNING: [{0}] {1}'.format(warning, line))
                     else:
