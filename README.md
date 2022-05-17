@@ -140,9 +140,9 @@ for more info.
 - *Default Value*: `[]`
 - *Possible Values*: list of strings
 
-A list of regex strings to supress in the stderr output. This option is for
-when something upstream, such as Electron, is producing a warning that can't be
-fixed.
+A list of regex patterns used to supress warnings in the stderr output. This
+option is for when something upstream, such as Electron, is producing a warning
+that can't be fixed.
 
 ### No Sandbox
 - *Formal Name*: `drawio_no_sandbox`
