@@ -135,14 +135,14 @@ conflict. This option only affects the output when the drawio app errors. See th
 [Electron docs](https://www.electronjs.org/docs/latest/api/command-line-switches#--enable-loggingfile)
 for more info.
 
-### Ignore STDERR Warnings
+### Ignore stderr Warnings
 - *Formal Name*: `drawio_ignore_stderr_warnings`
 - *Default Value*: `[]`
 - *Possible Values*: list of strings
 
-A list of strings to ignore, via regex, in the stderr output. Used in case
-something upstream, such as Electron, is producing a warning that can't be
-fixed.
+A list of strings to ignore, compared via regex, in the stderr output. This
+option is for when something upstream, such as Electron, is producing a warning
+that can't be fixed.
 
 ### No Sandbox
 - *Formal Name*: `drawio_no_sandbox`

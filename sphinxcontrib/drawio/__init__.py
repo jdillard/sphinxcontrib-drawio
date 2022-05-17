@@ -274,6 +274,8 @@ class DrawIOConverter(ImageConverter):
                 "draw.io ({}) exited with error:\n{}".format(" ".join(drawio_args), exc)
             )
         except subprocess.CalledProcessError as exc:
+            # split stderr on newlines and compare each line against the list of
+            # warnings to ignore and raise an error is any lines don't match.
             failed = False
             errors = exc.stderr.decode('utf8').split('\n')
             for warning in ignore_stderr_warnings:
