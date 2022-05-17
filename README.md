@@ -136,11 +136,11 @@ conflict. This option only affects the output when the drawio app errors. See th
 for more info.
 
 ### Supress stderr Warnings
-- *Formal Name*: `drawio_supress_stderr_warnings`
+- *Formal Name*: `drawio_suppress_stderr_warnings`
 - *Default Value*: `[]`
 - *Possible Values*: list of strings
 
-A list of regex patterns used to supress warnings in the stderr output. This
+A list of regex patterns used to suppress warnings in the stderr output. This
 option is for when something upstream, such as Electron, is producing a warning
 that can't be fixed.
 

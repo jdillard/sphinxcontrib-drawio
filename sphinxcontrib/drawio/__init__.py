@@ -183,7 +183,7 @@ class DrawIOConverter(ImageConverter):
         )
         disable_verbose_electron = builder.config.drawio_disable_verbose_electron
         no_sandbox = builder.config.drawio_no_sandbox
-        supress_stderr_warnings = builder.config.drawio_supress_stderr_warnings
+        suppress_stderr_warnings = builder.config.drawio_suppress_stderr_warnings
 
         # Any directive options which would change the output file would go here
         unique_values = (
@@ -278,7 +278,7 @@ class DrawIOConverter(ImageConverter):
             # warnings to ignore and raise an error is any lines don't match.
             failed = False
             errors = exc.stderr.decode('utf8').split('\n')
-            for warning in supress_stderr_warnings:
+            for warning in suppress_stderr_warnings:
                 for line in errors:
                     match = re.search(r'{}'.format(warning), line)
                     if match:
@@ -362,7 +362,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
     app.add_config_value(
         "drawio_disable_verbose_electron", False, "html", ENUM(True, False)
     )
-    app.add_config_value("drawio_supress_stderr_warnings", [], "html", list)
+    app.add_config_value("drawio_suppress_stderr_warnings", [], "html", list)
     app.add_config_value("drawio_no_sandbox", False, "html", ENUM(True, False))
 
     # deprecated
