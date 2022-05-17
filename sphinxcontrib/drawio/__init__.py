@@ -1,6 +1,7 @@
 import os
 import os.path
 import platform
+import re
 import subprocess
 from hashlib import sha1
 from pathlib import Path
@@ -182,6 +183,7 @@ class DrawIOConverter(ImageConverter):
         )
         disable_verbose_electron = builder.config.drawio_disable_verbose_electron
         no_sandbox = builder.config.drawio_no_sandbox
+        ignore_stderr_warnings = builder.config.drawio_ignore_stderr_warnings
 
         # Any directive options which would change the output file would go here
         unique_values = (
@@ -272,12 +274,22 @@ class DrawIOConverter(ImageConverter):
                 "draw.io ({}) exited with error:\n{}".format(" ".join(drawio_args), exc)
             )
         except subprocess.CalledProcessError as exc:
-            raise DrawIOError(
-                "draw.io ({}) exited with error:\n[stderr]\n{}"
-                "\n[stdout]\n{}\n[returncode]\n{}".format(
-                    " ".join(drawio_args), exc.stderr, exc.stdout, exc.returncode
+            failed = False
+            errors = exc.stderr.decode('utf8').split('\n')
+            for warning in ignore_stderr_warnings:
+                for line in errors:
+                    match = re.search(re.escape(warning), line)
+                    if match:
+                        print('IGNORED WARNING: [{0}] {1}'.format(warning, line))
+                    else:
+                        failed = True
+            if failed:
+                raise DrawIOError(
+                    "draw.io ({}) exited with error:\n[stderr]\n{}"
+                    "\n[stdout]\n{}\n[returncode]\n{}".format(
+                        " ".join(drawio_args), exc.stderr, exc.stdout, exc.returncode
+                    )
                 )
-            )
         if not export_abspath.exists():
             raise DrawIOError(
                 "draw.io did not produce an output file:"
@@ -348,6 +360,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
     app.add_config_value(
         "drawio_disable_verbose_electron", False, "html", ENUM(True, False)
     )
+    app.add_config_value("drawio_ignore_stderr_warnings", [], "html", list)
     app.add_config_value("drawio_no_sandbox", False, "html", ENUM(True, False))
 
     # deprecated
