@@ -2,6 +2,7 @@ import os
 import os.path
 import platform
 import re
+import shutil
 import subprocess
 from hashlib import sha1
 from pathlib import Path
@@ -9,12 +10,14 @@ from subprocess import Popen, PIPE
 from tempfile import TemporaryFile
 from time import sleep
 from typing import Dict, Any, List
+from xml.etree import ElementTree as ET
 
 from docutils import nodes
 from docutils.nodes import Node, image as docutils_image
 from docutils.parsers.rst import directives
 from docutils.parsers.rst.directives.images import Image
 from sphinx.application import Sphinx
+from sphinx.builders import Builder
 from sphinx.config import Config, ENUM
 from sphinx.directives.patches import Figure
 from sphinx.errors import SphinxError
@@ -23,14 +26,16 @@ from sphinx.util import logging
 from sphinx.util.docutils import SphinxDirective
 from sphinx.util.fileutil import copy_asset
 
-from .deprecated import DrawIONode, DrawIO, render_drawio_html, render_drawio_latex
-
-
-__version__ = "0.0.15"
+__version__ = "0.0.16"
 
 logger = logging.getLogger(__name__)
 
-VALID_OUTPUT_FORMATS = ("png", "jpg", "svg", "pdf")
+VALID_OUTPUT_FORMATS = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "svg": "image/svg+xml",
+    "pdf": "application/pdf",
+}
 
 
 def is_headless(config: Config):
@@ -50,7 +55,22 @@ class DrawIOError(SphinxError):
 
 
 def format_spec(argument: Any) -> str:
-    return directives.choice(argument, VALID_OUTPUT_FORMATS)
+    return directives.choice(argument, list(VALID_OUTPUT_FORMATS.keys()))
+
+
+def is_valid_format(format: str, builder: Builder) -> str:
+    mimetype = VALID_OUTPUT_FORMATS.get(format, None)
+
+    if format is None:
+        return None
+    elif mimetype is None:
+        raise DrawIOError(f"export format '{format}' is unsupported by draw.io")
+    elif mimetype not in builder.supported_image_types:
+        raise DrawIOError(
+            f"invalid export format '{format}' specified for builder '{builder.name}'"
+        )
+    else:
+        return format
 
 
 def boolean_spec(argument: Any) -> bool:
@@ -72,6 +92,7 @@ class DrawIOBase(SphinxDirective):
     option_spec = {
         "format": format_spec,
         "page-index": directives.nonnegative_int,
+        "page-name": directives.unchanged,
         "transparency": boolean_spec,
         "export-scale": directives.positive_int,
         "export-width": directives.positive_int,
@@ -120,14 +141,9 @@ class DrawIOConverter(ImageConverter):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        builder_name = self.app.builder.name
-        format = self.config.drawio_builder_export_format.get(builder_name)
-        if format and format not in VALID_OUTPUT_FORMATS:
-            raise DrawIOError(
-                f"Invalid export format '{format}' specified for builder"
-                f" '{builder_name}'"
-            )
-        self._default_export_format = format
+        format = self.config.drawio_builder_export_format.get(self.app.builder.name)
+
+        self._default_export_format = is_valid_format(format, self.app.builder)
 
     @property
     def imagedir(self) -> str:
@@ -139,14 +155,17 @@ class DrawIOConverter(ImageConverter):
 
     def guess_mimetypes(self, node: nodes.image) -> List[str]:
         if "drawio" in node["classes"]:
-            format = node.get("format") or self._default_export_format
+            node_format = is_valid_format(node.get("format"), self.app.builder)
+            format = node_format or self._default_export_format
             extra = "-{}".format(format) if format else ""
             return ["application/x-drawio" + extra]
-        return [None]
+        else:
+            return []
 
     def handle(self, node: nodes.image) -> None:
         """Render drawio file into an output image file."""
         _from, _to = self.get_conversion_rule(node)
+
         if _from in node["candidates"]:
             srcpath = node["candidates"][_from]
         else:
@@ -168,12 +187,49 @@ class DrawIOConverter(ImageConverter):
         self.env.original_image_uri[destpath] = srcpath
         self.env.images.add_file(self.env.docname, destpath)
 
+    @staticmethod
+    def page_name_to_index(input_abspath: str, name: str):
+        if name is None:
+            return None
+
+        for index, diagram in enumerate(ET.parse(input_abspath).getroot()):
+            if diagram.tag != "diagram":
+                continue
+            if diagram.attrib["name"] == name:
+                return index
+
+        raise DrawIOError(
+            "draw.io file {} has no diagram named: {}".format(input_abspath, name)
+        )
+
+    @staticmethod
+    def num_pages_in_file(input_abspath: Path) -> int:
+        # Each diagram/page is a direct child of the root element
+        return len(ET.parse(input_abspath).getroot())
+
     def _drawio_export(self, input_abspath, options, out_filename):
         builder = self.app.builder
         input_relpath = input_abspath.relative_to(builder.srcdir)
         input_stem = input_abspath.stem
 
-        page_index = str(options.get("page-index", 0))
+        page_name = options.get("page-name", None)
+        page_index = options.get("page-index", None)
+        if page_name is not None and page_index is not None:
+            raise DrawIOError("page-name & page-index cannot coexist")
+
+        if page_name:
+            page_index = self.page_name_to_index(input_abspath, page_name)
+        elif page_index:
+            max_index = self.num_pages_in_file(input_abspath) - 1
+            if page_index > max_index:
+                logger.warning(
+                    f"selected page {page_index} is out of range [0,{max_index}]"
+                )
+        elif page_index is None:
+            page_index = 0
+
+        page_index = str(page_index)
+
         scale = str(
             options.get("export-scale", builder.config.drawio_default_export_scale)
             / 100
@@ -208,14 +264,29 @@ class DrawIOConverter(ImageConverter):
         ):
             return export_abspath
 
+        drawio_in_path = shutil.which("drawio")
+        draw_dot_io_in_path = shutil.which("draw.io")
+        WINDOWS_PATH = r"C:\Program Files\draw.io\draw.io.exe"
+        MACOS_PATH = "/Applications/draw.io.app/Contents/MacOS/draw.io"
+        LINUX_PATH = "/opt/drawio/drawio"
+        LINUX_OLD_PATH = "/opt/draw.io/drawio"
+
         if builder.config.drawio_binary_path:
             binary_path = builder.config.drawio_binary_path
-        elif platform.system() == "Windows":
-            binary_path = r"C:\Program Files\draw.io\draw.io.exe"
+        elif drawio_in_path:
+            binary_path = drawio_in_path
+        elif draw_dot_io_in_path:
+            binary_path = draw_dot_io_in_path
+        elif platform.system() == "Windows" and os.path.isfile(WINDOWS_PATH):
+            binary_path = WINDOWS_PATH
+        elif platform.system() == "Darwin" and os.path.isfile(MACOS_PATH):
+            binary_path = MACOS_PATH
+        elif platform.system() == "Linux" and os.path.isfile(LINUX_PATH):
+            binary_path = LINUX_PATH
+        elif platform.system() == "Linux" and os.path.isfile(LINUX_OLD_PATH):
+            binary_path = LINUX_OLD_PATH
         else:
-            binary_path = "/opt/drawio/drawio"
-            if not os.path.isfile(binary_path):
-                binary_path = "/opt/draw.io/drawio"
+            raise DrawIOError("No drawio executable found")
 
         scale_args = ["--scale", scale]
         if output_format == "pdf" and float(scale) == 1.0:
@@ -364,16 +435,6 @@ def setup(app: Sphinx) -> Dict[str, Any]:
     )
     app.add_config_value("drawio_suppress_stderr_warnings", [], "html", list)
     app.add_config_value("drawio_no_sandbox", False, "html", ENUM(True, False))
-
-    # deprecated
-    app.add_node(
-        DrawIONode, html=(render_drawio_html, None), latex=(render_drawio_latex, None)
-    )
-    app.add_directive("drawio", DrawIO)
-    app.add_config_value(
-        "drawio_output_format", "png", "html", ENUM(*VALID_OUTPUT_FORMATS)
-    )
-    app.add_config_value("drawio_default_scale", 1, "html")
 
     # Add CSS file to the HTML static path for add_css_file
     app.connect("build-finished", on_build_finished)

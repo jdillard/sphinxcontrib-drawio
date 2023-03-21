@@ -5,27 +5,6 @@ These are equivalent to the standard `image` and `figure` directives, but
 accept the path to a `.drawio` file and additional options to control
 exporting of the diagram to a suitable image format. 
 
-These directives replace the `drawio` directive which is now deprecated, and
-for which support will be dropped in version 1.0. Deprecation warnings are 
-output when a `drawio` directive is encountered. Please replace these with
-`drawio-image` orand `drawio-figure`, taking into account these differences:
-
-- the *drawio_output_format* conf.py option has been removed; the draw.io
-  diagram is exported to the Sphinx builder's preferred image format (eg. SVG
-  for HTML, PDF for LaTeX). The *drawio_builder_export_format* configuration
-  variable allows setting another default export format for each builder. Note
-  that this can still be overridden for individual `drawio-image` and
-  `drawio-figure` directives. See below for details.
-- the *scale*, *width* and *height* options have been renamed, respectively, to
-  *export-scale*, *export-width* and *export-height* so as not to conflict with
-  the options inherited from the [image directive](https://docutils.sourceforge.io/docs/ref/rst/directives.html#image).
-- the *export-scale* option now takes an integer percentage; i.e. a value of 100
-  means no scaling. This was changed to allow non-integer scaling and offer
-  consistency with the `scale` option inherited from the [image directive](https://docutils.sourceforge.io/docs/ref/rst/directives.html#image).
-- the *drawio_default_scale* conf.py option has been replaced by the
-  *drawio_default_export_scale* option, also accepting a integer percentage
-  value.
-
 **Important:** This extension does not work on readthedocs as RTD does not allow
 packages (e.g. drawio) to be installed. If you only require diagrams in a single
 format, you can consider using editable SVGs or PNGs, accessible through
@@ -42,7 +21,7 @@ issue.
 ## Installation
 
 1. `python3 -m pip install sphinxcontrib-drawio`
-2. In your sphinx config:
+2. In your sphinx config, add:
 
     ```python
     extensions = [
@@ -50,9 +29,10 @@ issue.
     ]
     ```
 
-3. Add the binary to `$PATH`. For Windows add `C:\Program Files\draw.io` and on
-Linux add `/opt/drawio/`. 
-4. (if running headless), `sudo apt install xvfb`
+3. Add the draw.io binary to `$PATH`. See [Options: Binary Path](#binary-path)
+   for more details and alternative solutions.
+
+4. If running headless, install Xvfb, e.g. via `$ sudo apt install xvfb`.
 
 ## Options
 These values are placed in the `conf.py` of your sphinx project.
@@ -62,8 +42,12 @@ These values are placed in the `conf.py` of your sphinx project.
 - *Default Value*: `None`
 
 This allows for a specific override for the binary location. By default, this
-gets chosen depending on the OS (Linux, Mac, or Windows) to the default
-install path of the draw.io program.
+chooses the `drawio` (or `draw.io.exe`) binary accessible in `$PATH`. However,
+if this file does not exist, it picks the platform-appropriate path:
+
+- Windows: `C:\Program Files\draw.io\draw.io.exe`
+- Linux: `/opt/drawio/drawio` or `/opt/draw.io/drawio` (older versions)
+- MacOS: `/Applications/draw.io.app/Contents/MacOS/draw.io`.
 
 ### Headless Mode
 - *Formal Name*: `drawio_headless`
@@ -190,7 +174,18 @@ This option controls the output file format of *this specific* directive.
 
 This option allows you to select a particular page from a draw.io file to
 export. Note that an invalid page-index will revert to one of the other valid
-pages (draw.io binary functionality).
+pages (draw.io binary functionality). `page-name` and `page-index` cannot
+coexist, if you set both options, an error will be reported.
+
+### Page Name
+- *Formal Name*: `:page-name:`
+- *Default Value*: value of `:page-index:`, else the first page
+- *Possible Values*: any string
+
+This option allows you to select a particular page by its name from a draw.io
+file to export. `page-name` and `page-index` cannot coexist, if you set both
+options, an error will be reported. If `:page-name:` is not found in the draw.io
+file, an error will be reported too.
 
 ### Export Scale
 - *Formal Name*: `:export-scale:`
@@ -231,3 +226,4 @@ This changes the background transparency for diagrams exported to `png` files.
 Will override `drawio_default_transparency` which was set in conf.py for this
 specific diagram. If this setting is specified while the output format is not
 `png` it will have no effect on the generated image
+
