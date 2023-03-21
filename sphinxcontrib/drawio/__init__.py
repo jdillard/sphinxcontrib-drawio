@@ -1,6 +1,7 @@
 import os
 import os.path
 import platform
+import re
 import shutil
 import subprocess
 from hashlib import sha1
@@ -238,6 +239,7 @@ class DrawIOConverter(ImageConverter):
         )
         disable_verbose_electron = builder.config.drawio_disable_verbose_electron
         no_sandbox = builder.config.drawio_no_sandbox
+        suppress_stderr_warnings = builder.config.drawio_suppress_stderr_warnings
 
         # Any directive options which would change the output file would go here
         unique_values = (
@@ -343,12 +345,24 @@ class DrawIOConverter(ImageConverter):
                 "draw.io ({}) exited with error:\n{}".format(" ".join(drawio_args), exc)
             )
         except subprocess.CalledProcessError as exc:
-            raise DrawIOError(
-                "draw.io ({}) exited with error:\n[stderr]\n{}"
-                "\n[stdout]\n{}\n[returncode]\n{}".format(
-                    " ".join(drawio_args), exc.stderr, exc.stdout, exc.returncode
+            # split stderr on newlines and compare each line against the list of
+            # warnings to ignore and raise an error is any lines don't match.
+            failed = False
+            errors = exc.stderr.decode('utf8').split('\n')
+            for warning in suppress_stderr_warnings:
+                for line in errors:
+                    match = re.search(r'{}'.format(warning), line)
+                    if match:
+                        print('SUPPRESSED WARNING: [{0}] {1}'.format(warning, line))
+                    else:
+                        failed = True
+            if failed:
+                raise DrawIOError(
+                    "draw.io ({}) exited with error:\n[stderr]\n{}"
+                    "\n[stdout]\n{}\n[returncode]\n{}".format(
+                        " ".join(drawio_args), exc.stderr, exc.stdout, exc.returncode
+                    )
                 )
-            )
         if not export_abspath.exists():
             raise DrawIOError(
                 "draw.io did not produce an output file:"
@@ -419,6 +433,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
     app.add_config_value(
         "drawio_disable_verbose_electron", False, "html", ENUM(True, False)
     )
+    app.add_config_value("drawio_suppress_stderr_warnings", [], "html", list)
     app.add_config_value("drawio_no_sandbox", False, "html", ENUM(True, False))
 
     # Add CSS file to the HTML static path for add_css_file
