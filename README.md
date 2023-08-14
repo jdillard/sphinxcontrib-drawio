@@ -128,6 +128,25 @@ A list of regex patterns used to suppress warnings in the stderr output. This
 option is for when something upstream, such as Electron, is producing a warning
 that can't be fixed.
 
+### Disable Shared Memory Usage
+- *Formal Name*: `drawio_disable_dev_shm_usage`
+- *Default Value*: `False`
+- *Possible Values*: `True` or `False`
+
+By default, Docker runs a container with a `/dev/shm` shared memory space of 64MB.
+This is typically too small for Chrome (Electron) and will cause Chrome to throw
+an error. Launching the browser with the `--disable-dev-shm-usage` flag will write
+shared memory files into `/tmp` instead of `/dev/shm`.
+
+### Disable GPU
+- *Formal Name*: `drawio_disable_gpu`
+- *Default Value*: `False`
+- *Possible Values*: `True` or `False`
+
+By default, Chrome (Electron) uses GPU processes which can cause errors when
+running in environments that are not set up for it. This option disables those
+GPU processes and uses the CPU instead.
+
 ### No Sandbox
 - *Formal Name*: `drawio_no_sandbox`
 - *Default Value*: `False`
